@@ -1,61 +1,65 @@
-///n<rとなる2の冪乗のrを探索
-fn search_r(n: u64) -> (u64, u64) {
-    let mut r: u64 = 1; //rの値
-    let mut x: u64 = 0; //rが2の何乗かを表す
-    while r <= n {
-        r *= 2;
-        x += 1;
-    }
-    (r, x)
+pub struct MontgomeryReducer {
+    n: u64,
+    n_prime: u64,
+    r: u64,
+    r_x: u64,
 }
 
-///n*n_prime = -1 mod rとなるn_primeを探索
-fn search_n_prime(mut r: u64, n: u64) -> u64 {
-    let mut n_prime: u64 = 0; //返却する値
-    let mut tmp: u64 = 0; //一時的なr*n_primeの値を注目すべき桁が最下位になるようにしたもの
-    let mut i: u64 = 1; //tmpの下位1bitが0だったときにn_primeに足すべき値
-    while r > 1 {
-        if tmp % 2 == 0 {
-            tmp += n;
-            n_prime += i;
+impl MontgomeryReducer {
+    pub fn new(n: u64) -> Self {
+        let (r, r_x) = Self::search_r(n);
+        let n_prime = Self::search_n_prime(r, n);
+        Self { n, n_prime, r, r_x }
+    }
+    ///n<rとなる2の冪乗のrを探索
+    fn search_r(n: u64) -> (u64, u64) {
+        let mut r: u64 = 1; //rの値
+        let mut x: u64 = 0; //rが2の何乗かを表す
+        while r <= n {
+            r *= 2;
+            x += 1;
         }
-        tmp /= 2;
-        r /= 2;
-        i *= 2;
+        (r, x)
     }
-    n_prime
+
+    ///n*n_prime = -1 mod rとなるn_primeを探索
+    fn search_n_prime(mut r: u64, n: u64) -> u64 {
+        let mut n_prime: u64 = 0; //返却する値
+        let mut tmp: u64 = 0; //一時的なr*n_primeの値を注目すべき桁が最下位になるようにしたもの
+        let mut i: u64 = 1; //tmpの下位1bitが0だったときにn_primeに足すべき値
+        while r > 1 {
+            if tmp % 2 == 0 {
+                tmp += n;
+                n_prime += i;
+            }
+            tmp /= 2;
+            r /= 2;
+            i *= 2;
+        }
+        n_prime
+    }
+
+    ///モンゴメリリダクションの実装
+    /// t <= (a + (a * n_prime mod r) * n) / r
+    fn montgomery_reduction(&self, a: u64) -> u64 {
+        let mut t: u64 = a * self.n_prime;
+        t &= self.r - 1; //a*n_prime mod r
+        t *= self.n; //a*n_prime mod r * n
+        t += a; // a + a*n_prime mod r * n
+        t >>= self.r_x; // (a + a*n_prime mod r * n) / r
+        if t >= self.n {
+            t -= self.n;
+        }
+        t
+    }
+
+    ///モンゴメリ乗算の実装
+    pub fn mod_mul(&self, a: u64, b: u64) -> u64 {
+        let r_2: u64 = (self.r % self.n) * (self.r % self.n) % self.n; //r^2 mod n
+        self.montgomery_reduction(self.montgomery_reduction(a * b) * r_2)
+    }
 }
 
-///モンゴメリリダクションの実装
-/// t <= (a + (a * n_prime mod r) * n) / r
-fn montgomery_reduction(a: u64, n: u64, n_prime: u64, r: u64, r_x: u64) -> u64 {
-    let mut t: u64 = a * n_prime;
-    t &= r - 1; //a*n_prime mod r
-    t *= n; //a*n_prime mod r * n
-    t += a; // a + a*n_prime mod r * n
-    t >>= r_x; // (a + a*n_prime mod r * n) / r
-    if t >= n {
-        t -= n;
-    }
-    t
-}
-
-///モンゴメリ乗算の実装
-fn mod_mul(a: u64, b: u64, n: u64) -> u64 {
-    let (r, x) = search_r(n);
-    println!("r = {}, x = {}", r, x);
-    let n_prime: u64 = search_n_prime(r, n);
-    println!("n = {}, n_prime = {}, n*n_prime mod r = {}",n, n_prime, n*n_prime % r);
-    let r_2: u64 = (r % n) * (r % n) % n; //r^2 mod n
-    let result = montgomery_reduction(
-        montgomery_reduction(a * b, n, n_prime, r, x) * r_2,
-        n,
-        n_prime,
-        r,
-        x,
-    );
-    result
-}
 
 ///実行時引数からa,b,Nを受け取って a*b mod N をモンゴメリ乗算を使って計算
 fn main() {
@@ -63,7 +67,8 @@ fn main() {
     let a: u64 = args[1].parse().unwrap();
     let b: u64 = args[2].parse().unwrap();
     let n: u64 = args[3].parse().unwrap();
-    println!("{}", mod_mul(a, b, n));
+    let reducer = MontgomeryReducer::new(n);
+    println!("{}", reducer.mod_mul(a, b));
 }
 
 #[cfg(test)]
@@ -82,7 +87,8 @@ mod tests {
         ];
 
         for (a, b, n, expected) in test_cases {
-            assert_eq!(mod_mul(a, b, n), expected);
+            let reducer: MontgomeryReducer = MontgomeryReducer::new(n);
+            assert_eq!(reducer.mod_mul(a, b), expected);
         }
     }
 }
