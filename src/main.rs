@@ -49,6 +49,9 @@ impl MontgomeryReducer {
     ///モンゴメリリダクションの実装
     /// t <= (a + (a * n_prime mod r) * n) / r
     fn montgomery_reduction(&self, a: u64) -> u64 {
+        if self.n * self.r <= a {
+            panic!("a is too large");
+        }
         let mut t: u64 = a * self.n_prime;
         t &= self.r - 1; //a*n_prime mod r
         t *= self.n; //a*n_prime mod r * n
@@ -57,13 +60,13 @@ impl MontgomeryReducer {
         if t >= self.n {
             t -= self.n;
         }
-        // println!("t = {}", t);
         t
     }
 
     ///モンゴメリ乗算の実装
     pub fn mod_mul(&self, a: u64, b: u64) -> u64 {
         let r_2: u64 = (self.r % self.n) * (self.r % self.n) % self.n; //r^2 mod n
+        // println!("r^2 mod n = {}", r_2);
         let aa = self.montgomery_reduction(a * r_2);
         let bb = self.montgomery_reduction(b * r_2);
         let ab = self.montgomery_reduction(aa * bb);
@@ -90,6 +93,25 @@ fn main() {
 mod tests {
     use super::*;
     use rand::Rng;
+    fn search_r(n: u64) -> (u64, u64) {
+        let mut r: u64 = 1; //rの値
+        let mut x: u64 = 0; //rが2の何乗かを表す
+        while r <= n {
+            r *= 2;
+            x += 1;
+        }
+        (r, x)
+    }
+
+    fn too_big_a(a: u64, b: u64, n: u64) -> bool {
+        let (r, _) = search_r(n);
+        let r_2: u64 = (r % n) * (r % n) % n; //r^2 mod n
+        if a * r_2 >= n || b * r_2 >= n {
+            true
+        } else {
+            false
+        }
+    }
 
     #[test]
     fn test_mod_mul() {
@@ -108,7 +130,7 @@ mod tests {
         }
 
         let mut rng: rand::rngs::ThreadRng = rand::thread_rng();
-        for _ in 0..10 {
+        for _ in 0..100000 {
             let a: u64 = rng.gen_range(1..1_000_000);
             let b: u64 = rng.gen_range(1..1_000_000);
             let mut n: u64 = rng.gen_range(1..1_000_000);
@@ -117,8 +139,31 @@ mod tests {
             }
             let reducer: MontgomeryReducer = MontgomeryReducer::new(n as u64);
             let expected: u64 = (a * b) % n;
-            println!("{} * {} mod {} = {}", a, b, n, expected);
+            // println!("{} * {} mod {} = {}", a, b, n, expected);
+            if too_big_a(a, b, n) {
+                continue;
+            }
             assert_eq!(reducer.mod_mul(a, b), expected);
+        }
+    }
+    #[test]
+    #[should_panic(expected = "a is too large")]
+    fn test_over_case(){
+        let mut rng: rand::rngs::ThreadRng = rand::thread_rng();
+        for _ in 0..100000 {
+            let a: u64 = rng.gen_range(1..1_000_000);
+            let b: u64 = rng.gen_range(1..1_000_000);
+            let mut n: u64 = rng.gen_range(1..1_000_000);
+            if n % 2 == 0 {
+                n += 1;
+            }
+            let reducer: MontgomeryReducer = MontgomeryReducer::new(n as u64);
+            let expected: u64 = (a * b) % n;
+            if !too_big_a(a, b, n) {
+                continue;
+            }
+            println!("{} * {} mod {} = {}", a, b, n, expected);
+            reducer.mod_mul(a, b);
         }
     }
 }
