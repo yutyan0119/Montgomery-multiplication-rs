@@ -64,15 +64,15 @@ impl MontgomeryReducer {
     ///モンゴメリ乗算の実装
     pub fn mod_mul(&self, a: u64, b: u64) -> u64 {
         let r_2: u64 = (self.r % self.n) * (self.r % self.n) % self.n; //r^2 mod n
+        let aa = self.montgomery_reduction(a * r_2);
+        let bb = self.montgomery_reduction(b * r_2);
+        let ab = self.montgomery_reduction(aa * bb);
+        let ans = self.montgomery_reduction(ab);
+        ans
         // println!("r^2 mod n = {}", r_2);
         // println!("a*b = {}", a * b);
         //こっちだとでかい値のときにオーバーフローかなにかでおかしくなる
         // self.montgomery_reduction(self.montgomery_reduction(a * b) * r_2);
-        let aa = self.montgomery_reduction(a*r_2);
-        let bb = self.montgomery_reduction(b*r_2);
-        let ab = self.montgomery_reduction(aa*bb);
-        let ans = self.montgomery_reduction(ab);
-        ans
     }
 }
 
